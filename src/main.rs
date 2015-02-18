@@ -1,4 +1,4 @@
-#![feature(core, collections, io, os, path)]
+#![feature(core, collections, env, io, path)]
 
 extern crate getopts;
 extern crate http;
@@ -8,9 +8,9 @@ extern crate "rustc-serialize" as rustc_serialize;
 
 use regex::Regex;
 use std::collections::HashMap;
+use std::env;
 use std::old_io::File;
 use std::old_io::net::ip::Ipv4Addr;
-use std::os;
 
 use getopts::Options;
 use http::status::NotFound;
@@ -89,7 +89,7 @@ fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
         Ok(mut file) => {
             match file.read_to_string() {
                 Ok(content) => {
-                    let mut lines = content.split_str("\n");
+                    let lines = content.split_str("\n");
                     for mut line in lines {
                         line = line.trim_matches(' ');
                         if line.is_empty() || comment.is_match(line) {
@@ -127,7 +127,7 @@ fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
 }
 
 fn main() {
-    let args: Vec<String> = os::args();
+    let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
     let mut assets_path = "".to_string();
     let mut port: u16 = 7000;
@@ -153,8 +153,8 @@ fn main() {
     if matches.opt_present("port") {
         let port_s = &matches.opt_str("port").unwrap()[];
         match port_s.parse::<u16>() {
-            Some(p) => port = p,
-            None => {
+            Ok(p) => port = p,
+            Err(_) => {
                 usage(program.as_slice(), opts);
                 return;
             }

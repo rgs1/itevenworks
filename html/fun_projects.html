@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>itevenworks.net!</title>
+<link data-turbolinks-track="true" href="/assets/rouge.css" media="all" rel="stylesheet" />
+</head>
+<body>
+<h3>Software Requirements and Specifications: A Lexicon of Practice, Principles and Prejudices</h3>
+
+<p>I first heard about <a href="http://en.wikipedia.org/wiki/Michael_A._Jackson" target="_blank">Michael A. Jackson</a> whilst listening to <a href="http://en.wikipedia.org/wiki/Rob_Pike" target="_blank">Rob Pike</a>. I got interested in some of his ideas so I started reading <a href="http://www.amazon.com/Software-Requirements-Specifications-Principles-Prejudices/dp/0201877120" target="_blank">Software Requirements and Specifications: A Lexicon of Practice, Principles and Prejudices</a> and so far I could only wished I had read this book before: lots of very good points!</p>
+
+<h3>A ZooKeeper Observer that can follow multiple leaders</h3>
+
+<p>Imagine that you could have mount points in <a href="http://zookeeper.apache.org/" rel="nofollow">ZooKeeper</a>. In your config you would associate a cluster config with a mount-point perhaps doing something like:</p>
+<div class="highlight conf"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5</pre></td><td class="code"><pre><span style="background-color: #f8f8f8">cluster1</span> = <span style="color: #009999">10</span>.<span style="color: #009999">0</span>.<span style="color: #009999">1</span>.<span style="color: #009999">1</span>:<span style="color: #009999">2889</span>:<span style="color: #009999">3889</span>;<span style="color: #009999">10</span>.<span style="color: #009999">0</span>.<span style="color: #009999">1</span>.<span style="color: #009999">2</span>:<span style="color: #009999">2889</span>:<span style="color: #009999">3889</span>;<span style="color: #009999">10</span>.<span style="color: #009999">0</span>.<span style="color: #009999">1</span>.<span style="color: #009999">3</span>:<span style="color: #009999">2889</span>:<span style="color: #009999">3889</span>
+<span style="background-color: #f8f8f8">cluster2</span> = <span style="color: #009999">10</span>.<span style="color: #009999">0</span>.<span style="color: #009999">2</span>.<span style="color: #009999">4</span>:<span style="color: #009999">2889</span>:<span style="color: #009999">3889</span>;<span style="color: #009999">10</span>.<span style="color: #009999">0</span>.<span style="color: #009999">2</span>.<span style="color: #009999">5</span>:<span style="color: #009999">2889</span>:<span style="color: #009999">3889</span>;<span style="color: #009999">10</span>.<span style="color: #009999">0</span>.<span style="color: #009999">2</span>.<span style="color: #009999">6</span>:<span style="color: #009999">2889</span>:<span style="color: #009999">3889</span>
+
+<span style="background-color: #f8f8f8">cluster1</span>:/<span style="background-color: #f8f8f8">configs</span> /<span style="background-color: #f8f8f8">cluster1</span>/<span style="background-color: #f8f8f8">configs</span>  <span style="color: #999988;font-style: italic"># follows cluster 1
+</span><span style="background-color: #f8f8f8">cluster2</span>:/<span style="background-color: #f8f8f8">configs</span> /<span style="background-color: #f8f8f8">cluster2</span>/<span style="background-color: #f8f8f8">configs</span>  <span style="color: #999988;font-style: italic"># ditto for cluster 2
+</span></pre></td></tr></tbody></table>
+</div>
+
+<p>This would allow to effectively parallelize <a href="http://www.tcs.hut.fi/Studies/T-79.5001/reports/2012-deSouzaMedeiros.pdf" rel="nofollow">ZAB</a> operations, which by definition are only linear. Of course, it means breaking ZooKeeper semantics across different paths in /. Though, in practice, it&#39;s unlikely that your apps need full semantics across <em>all</em> of the / namespace, anyway. Then, these operations would be close to parallel (i.e.: you stil serialize within your session):</p>
+<div class="highlight ruby"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3</pre></td><td class="code"><pre><span style="background-color: #f8f8f8">zk</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #008080">ZkClient</span><span style="background-color: #f8f8f8">.</span><span style="color: #990000;font-weight: bold">new</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">:cluster</span> <span style="color: #000000;font-weight: bold">=&gt;</span> <span style="color: #d14">"localhost:2181"</span><span style="background-color: #f8f8f8">)</span>
+<span style="background-color: #f8f8f8">zk</span><span style="background-color: #f8f8f8">.</span><span style="color: #990000;font-weight: bold">create</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"/cluster1/configs/myconfig"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">json_blob</span><span style="background-color: #f8f8f8">)</span>
+<span style="background-color: #f8f8f8">zk</span><span style="background-color: #f8f8f8">.</span><span style="color: #990000;font-weight: bold">create</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">"/cluster2/configs/myconfig"</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">json_blob</span><span style="background-color: #f8f8f8">)</span>
+</pre></td></tr></tbody></table>
+</div>
+
+<p>This could be a huge improvement for multi-tenant ZooKeeper setups, which could still share the costs of Observers.</p>
+
+<h3>pcap-ng support in Linux</h3>
+
+<p>Turns out that Apple already supports <a href="http://www.opensource.apple.com/source/libpcap/libpcap-42/libpcap/pcapng.c?txt" target="_blank">pcap-ng</a>. The full RFC for pcap-ng is <a href="http://www.winpcap.org/ntar/draft/PCAP-DumpFileFormat.html" target="_blank">here</a>. <a href="http://www.tcpdump.org/" target="_blank">libpcap</a>, actually does have some support for it but the most interesting bits (i.e.: process event blocks) are still missing. pcap is very useful to understand what&#39;s going on in your network, so pcap-ng support would indeed be great.</p>
+</body></html>

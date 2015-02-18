@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>itevenworks.net!</title>
+<link data-turbolinks-track="true" href="/assets/rouge.css" media="all" rel="stylesheet" />
+</head>
+<body>
+<h2>Learning Rust</h2>
+
+<h3>Do we need another language?</h3>
+
+<p>So, it&#39;s been some time since I&#39;ve seen a language that really delighted me. Full disclosure, I enjoyed doing some <a href="https://wiki.gnome.org/Projects/Vala" target="_blank">Vala</a> back in the 2011. The language, which is actually just a wrapper around C + GObject, had some fresh ideas for those of us who wanted to do Systems Programming but also aspired to something more modern than C or C++.</p>
+
+<h2>Some tricks</h2>
+
+<h3>Sending traits over channels</h3>
+
+<p>As usual, Stackoverflow is an excellent resource. I picked up this little gem about sending traits over a task boundary <a href="http://stackoverflow.com/questions/25649423/sending-trait-objects-between-tasks-in-rust" target="_blank">here</a>. It was really helpful to get a better grasp of the use about <a href="https://github.com/rust-lang/rust/blob/master/src/liballoc/boxed.rs#L53" target="_blank">Box</a> and the <a href="https://github.com/rust-lang/rust/blob/master/src/libcore/marker.rs#L33" target="_blank">Send</a> trait.</p>
+
+<h3>Struct variants</h3>
+
+<p><a href="https://github.com/rust-lang/rfcs/blob/master/text/0418-struct-variants.md" target="_blank">Struct variants</a> in enum are very convenient. Compare this variant which uses a tuple:</p>
+<div class="highlight rust"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5</pre></td><td class="code"><pre><span style="color: #000000;font-weight: bold">enum</span> <span style="background-color: #f8f8f8">FrontendMessage</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="background-color: #f8f8f8">{</span>
+    <span style="color: #999988;font-style: italic">// ...</span>
+    <span style="color: #990000;font-weight: bold">Bind</span><span style="background-color: #f8f8f8">(</span><span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="color: #0086B3">str</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="color: #0086B3">str</span><span style="background-color: #f8f8f8">,</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">[</span><span style="color: #0086B3">i16</span><span style="background-color: #f8f8f8">],</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">[</span><span style="color: #0086B3">Option</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="background-color: #f8f8f8">Vec</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #0086B3">u8</span><span style="color: #000000;font-weight: bold">&gt;&gt;</span><span style="background-color: #f8f8f8">],</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">[</span><span style="color: #0086B3">i16</span><span style="background-color: #f8f8f8">]),</span>
+    <span style="color: #999988;font-style: italic">// ...</span>
+<span style="background-color: #f8f8f8">}</span>
+</pre></td></tr></tbody></table>
+</div>
+
+<p>with this, almost self-evident, struct variant version:</p>
+<div class="highlight rust"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11</pre></td><td class="code"><pre><span style="color: #000000;font-weight: bold">enum</span> <span style="background-color: #f8f8f8">FrontendMessage</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span><span style="color: #000000;font-weight: bold">&gt;</span> <span style="background-color: #f8f8f8">{</span>
+    <span style="color: #999988;font-style: italic">// ...</span>
+    <span style="background-color: #f8f8f8">Bind</span> <span style="background-color: #f8f8f8">{</span>
+        <span style="color: #000000;font-weight: bold">pub</span> <span style="background-color: #f8f8f8">portal</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="color: #0086B3">str</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #000000;font-weight: bold">pub</span> <span style="background-color: #f8f8f8">statement</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="color: #0086B3">str</span><span style="background-color: #f8f8f8">,</span>
+        <span style="color: #000000;font-weight: bold">pub</span> <span style="background-color: #f8f8f8">formats</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">[</span><span style="color: #0086B3">i16</span><span style="background-color: #f8f8f8">],</span>
+        <span style="color: #000000;font-weight: bold">pub</span> <span style="background-color: #f8f8f8">values</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">[</span><span style="color: #0086B3">Option</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="background-color: #f8f8f8">Vec</span><span style="color: #000000;font-weight: bold">&lt;</span><span style="color: #0086B3">u8</span><span style="color: #000000;font-weight: bold">&gt;&gt;</span><span style="background-color: #f8f8f8">],</span>
+        <span style="color: #000000;font-weight: bold">pub</span> <span style="background-color: #f8f8f8">result_formats</span><span style="background-color: #f8f8f8">:</span> <span style="color: #000000;font-weight: bold">&amp;</span><span style="color: #a61717;background-color: #e3d2d2">'</span><span style="background-color: #f8f8f8">a</span> <span style="background-color: #f8f8f8">[</span><span style="color: #0086B3">i16</span><span style="background-color: #f8f8f8">]</span>
+    <span style="background-color: #f8f8f8">},</span>
+    <span style="color: #999988;font-style: italic">// ...</span>
+<span style="background-color: #f8f8f8">}</span>
+</pre></td></tr></tbody></table>
+</div>
+</body></html>

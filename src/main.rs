@@ -1,4 +1,4 @@
-#![feature(core, collections, env, io, path)]
+#![feature(core, collections, env, old_io, old_path)]
 
 extern crate getopts;
 extern crate http;

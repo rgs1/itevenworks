@@ -69,8 +69,8 @@ fn run(assests_path: &str, port: u16, routes: HashMap<String, String>) {
     let mut router = Nickel::router();
 
     for (route, html_path) in routes.iter() {
-        let handler = PageHandler { path: Path::new(&html_path[]) };
-        router.get(&route[], handler);
+        let handler = PageHandler { path: Path::new(&*html_path) };
+        router.get(&*route, handler);
     }
 
     server.utilize(router);
@@ -82,7 +82,7 @@ fn run(assests_path: &str, port: u16, routes: HashMap<String, String>) {
 
 fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
     let mut routes = HashMap::new();
-    let path = Path::new(&routes_cfg[]);
+    let path = Path::new(&*routes_cfg);
     let comment = Regex::new(r"^#").unwrap();
 
     match File::open(&path) {
@@ -151,7 +151,7 @@ fn main() {
     }
 
     if matches.opt_present("port") {
-        let port_s = &matches.opt_str("port").unwrap()[];
+        let port_s = &*matches.opt_str("port").unwrap();
         match port_s.parse::<u16>() {
             Ok(p) => port = p,
             Err(_) => {
@@ -174,5 +174,5 @@ fn main() {
 
     let routes = parse_routes(routes_cfg);
 
-    run(&assets_path[], port, routes);
+    run(&*assets_path, port, routes);
 }

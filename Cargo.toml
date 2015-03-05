@@ -7,8 +7,8 @@ authors = ["Raul Gutierrez S. <rgs@itevenworks.net>"]
 [dependencies.nickel]
 git = "https://github.com/nickel-org/nickel.rs"
 
-[dependencies.http]
-git = "https://github.com/nickel-org/rust-http.git"
+[dependencies.nickel_macros]
+git = "https://github.com/nickel-org/nickel.rs"
 
 [dependencies]
 getopts = "*"

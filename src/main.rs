@@ -1,61 +1,53 @@
-#![feature(core, collections, env, old_io, old_path)]
+#![feature(core, collections, io, net, path)]
 
 extern crate getopts;
-extern crate http;
 extern crate nickel;
+#[macro_use] extern crate nickel_macros;
 extern crate regex;
 extern crate "rustc-serialize" as rustc_serialize;
 
-use regex::Regex;
 use std::collections::HashMap;
 use std::env;
-use std::old_io::File;
-use std::old_io::net::ip::Ipv4Addr;
+use std::fs::File;
+use std::io::prelude::*;
+use std::net::IpAddr;
+use std::path::Path;
 
 use getopts::Options;
-use http::status::NotFound;
 use nickel::{
     Nickel, NickelError, ErrorWithStatusCode, Continue, Halt, Request, Response,
     StaticFilesHandler, MiddlewareResult, HttpRouter, Action, Middleware
 };
-use nickel::mimes::MediaType;
+use nickel::status::StatusCode::NotFound;
+use regex::Regex;
 
 struct PageHandler {
-    path: Path,
+    path: String,
 }
 
-impl Middleware for PageHandler {
-    fn invoke(&self, _req: &mut Request, res: &mut Response) -> Result<Action, NickelError> {
-        match File::open(&self.path) {
-            Ok(mut file) => {
-                match file.read_to_string() {
-                    Ok(content) => {
-                        res.content_type(MediaType::Html);
-                        res.send(content)
-                    },
-                    Err(why) => panic!("couldn't read : {}", why.desc),
-                }
-            },
-            Err(_) => res.send("Something went wrong"),
+impl PageHandler {
+    pub fn new (p: String) -> PageHandler {
+        PageHandler {
+            path: p,
         }
-        Ok(Halt)
     }
 }
 
-fn logger(request: &Request, _response: &mut Response) -> MiddlewareResult {
-    println!("logging request: {}", request.origin.request_uri);
-    Ok(Continue)
+impl Middleware for PageHandler {
+    fn invoke<'a>(&self, _: &mut Request, res: Response<'a>) -> MiddlewareResult<'a> {
+        Ok(Halt(try!(res.send_file(Path::new(&self.path[..])))))
+    }
 }
 
-fn custom_404(err: &NickelError, _req: &Request, response: &mut Response) -> MiddlewareResult {
+fn custom_404<'a>(err: &mut NickelError, _req: &mut Request) -> Action {
     match err.kind {
         ErrorWithStatusCode(NotFound) => {
-            response.content_type(MediaType::Html)
-                    .status_code(NotFound)
-                    .send("<h1>Oops, not found!<h1>");
-            Ok(Halt)
+            if let Some(ref mut res) = err.stream {
+                let _ = res.write_all(b"<h1>Oops, not found!<h1>");
+            }
+            Halt(())
         },
-        _ => Ok(Continue)
+        _ => Continue(())
     }
 }
 
@@ -69,15 +61,16 @@ fn run(assests_path: &str, port: u16, routes: HashMap<String, String>) {
     let mut router = Nickel::router();
 
     for (route, html_path) in routes.iter() {
-        let handler = PageHandler { path: Path::new(&*html_path) };
-        router.get(&*route, handler);
+        router.get(&*route, PageHandler::new(html_path.clone()));
     }
 
     server.utilize(router);
     server.utilize(StaticFilesHandler::new(assests_path));
-    server.utilize(logger as fn(&Request, &mut Response) -> MiddlewareResult);
-    server.handle_error(custom_404 as fn(&NickelError, &Request, &mut Response) -> MiddlewareResult);
-    server.listen(Ipv4Addr(0, 0, 0, 0), port);
+    server.utilize(middleware! { |request|
+      println!("logging request: {:?}", request.origin.uri);
+    });
+    server.handle_error(custom_404 as fn(&mut NickelError, &mut Request) -> Action);
+    server.listen(IpAddr::new_v4(0, 0, 0, 0), port);
 }
 
 fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
@@ -87,16 +80,17 @@ fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
 
     match File::open(&path) {
         Ok(mut file) => {
-            match file.read_to_string() {
-                Ok(content) => {
-                    let lines = content.split_str("\n");
+            let mut content = String::new();
+            match file.read_to_string(&mut content) {
+                Ok(()) => {
+                    let lines = content.split("\n");
                     for mut line in lines {
                         line = line.trim_matches(' ');
                         if line.is_empty() || comment.is_match(line) {
                             continue;
                         }
 
-                        let mut parts = line.split_str(" ");
+                        let mut parts = line.split(" ");
                         let mut added = false;
                         match parts.next() {
                             Some(route) => {
@@ -117,7 +111,7 @@ fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
                         }
                     }
                 },
-                Err(why) => panic!("couldn't read: {}", why.desc),
+                Err(e) => panic!("couldn't read: {:?}", e),
             }
         },
         Err(e) => panic!("couldn't open routes cfg: {}", e),

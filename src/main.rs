@@ -1,21 +1,18 @@
-#![feature(core, collections, io, net, path)]
-
 extern crate getopts;
 extern crate nickel;
 #[macro_use] extern crate nickel_macros;
 extern crate regex;
-extern crate "rustc-serialize" as rustc_serialize;
+extern crate rustc_serialize;
 
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
-use std::net::IpAddr;
 use std::path::Path;
 
 use getopts::Options;
 use nickel::{
-    Nickel, NickelError, ErrorWithStatusCode, Continue, Halt, Request, Response,
+    Nickel, NickelError, Continue, Halt, Request, Response,
     StaticFilesHandler, MiddlewareResult, HttpRouter, Action, Middleware
 };
 use nickel::status::StatusCode::NotFound;
@@ -35,25 +32,24 @@ impl PageHandler {
 
 impl Middleware for PageHandler {
     fn invoke<'a>(&self, _: &mut Request, res: Response<'a>) -> MiddlewareResult<'a> {
-        Ok(Halt(try!(res.send_file(Path::new(&self.path[..])))))
+        res.send_file(Path::new(&self.path[..]))
     }
 }
 
 fn custom_404<'a>(err: &mut NickelError, _req: &mut Request) -> Action {
-    match err.kind {
-        ErrorWithStatusCode(NotFound) => {
-            if let Some(ref mut res) = err.stream {
-                let _ = res.write_all(b"<h1>Oops, not found!<h1>");
-            }
-            Halt(())
-        },
-        _ => Continue(())
+    if let Some(ref mut res) = err.stream {
+        if res.status() == NotFound {
+            let _ = res.write_all(b"<h1>Oops, not found!<h1>");
+            return Halt(())
+        }
     }
+
+    Continue(())
 }
 
 fn usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options] <routes-cfg>", program);
-    print!("{}", opts.usage(brief.as_slice()));
+    print!("{}", opts.usage(&brief[..]));
 }
 
 fn run(assests_path: &str, port: u16, routes: HashMap<String, String>) {
@@ -61,7 +57,7 @@ fn run(assests_path: &str, port: u16, routes: HashMap<String, String>) {
     let mut router = Nickel::router();
 
     for (route, html_path) in routes.iter() {
-        router.get(&*route, PageHandler::new(html_path.clone()));
+        router.get(&route[..], PageHandler::new(html_path.clone()));
     }
 
     server.utilize(router);
@@ -70,7 +66,8 @@ fn run(assests_path: &str, port: u16, routes: HashMap<String, String>) {
       println!("logging request: {:?}", request.origin.uri);
     });
     server.handle_error(custom_404 as fn(&mut NickelError, &mut Request) -> Action);
-    server.listen(IpAddr::new_v4(0, 0, 0, 0), port);
+    let addr = format!("0.0.0.0:{}", port);
+    server.listen(&addr[..]);
 }
 
 fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
@@ -82,7 +79,7 @@ fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
         Ok(mut file) => {
             let mut content = String::new();
             match file.read_to_string(&mut content) {
-                Ok(()) => {
+                Ok(_) => {
                     let lines = content.split("\n");
                     for mut line in lines {
                         line = line.trim_matches(' ');
@@ -131,16 +128,16 @@ fn main() {
     opts.optopt("", "assets-path", "path for static assets", "ASSETS");
     opts.optflag("h", "help", "print this help menu");
 
-    let matches = match opts.parse(args.tail()) {
+    let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m }
         Err(_) => {
-            usage(program.as_slice(), opts);
+            usage(&program[..], opts);
             return;
         }
     };
 
     if matches.opt_present("h") {
-        usage(program.as_slice(), opts);
+        usage(&program[..], opts);
         return;
     }
 
@@ -149,7 +146,7 @@ fn main() {
         match port_s.parse::<u16>() {
             Ok(p) => port = p,
             Err(_) => {
-                usage(program.as_slice(), opts);
+                usage(&program[..], opts);
                 return;
             }
         }
@@ -162,7 +159,7 @@ fn main() {
     let routes_cfg = if !matches.free.is_empty() {
         matches.free[0].clone()
     } else {
-        usage(program.as_slice(), opts);
+        usage(&program[..], opts);
         return;
     };
 

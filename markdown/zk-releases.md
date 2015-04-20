@@ -173,3 +173,27 @@ $ for i in $(seq 0 5) ; do
    ssh root@virt-0${i} 'bash -x /root/zookeeper-3.5.1-alpha/bin/zkServer.sh start'
   done
 ```
+
+To test the cluster from the host, we can use <a href="https://github.com/rgs1/zk_shell">zk-shell</a>:
+
+```shell
+$ zk-shell virt-00
+Welcome to zk-shell (1.0.05)
+(CONNECTING) />
+(CONNECTED) /> loop 100 0 'create test_ "" true true '
+(CONNECTED) /> exists /
+Stat(
+  czxid=0
+  mzxid=0
+  ctime=0
+  mtime=0
+  version=0
+  cversion=99
+  aversion=0
+  ephemeralOwner=0x0
+  dataLength=0
+  numChildren=101
+  pzxid=4294967397
+)
+(CONNECTED) />
+```

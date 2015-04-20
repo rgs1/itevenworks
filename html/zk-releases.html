@@ -272,4 +272,45 @@ virt-00                          container nspawn
   <span style="color: #000000;font-weight: bold">done</span>
 </pre></td></tr></tbody></table>
 </div>
+
+<p>To test the cluster from the host, we can use <a href="https://github.com/rgs1/zk_shell">zk-shell</a>:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19</pre></td><td class="code"><pre><span style="color: #555555">$ </span>zk-shell virt-00
+Welcome to zk-shell <span style="color: #000000;font-weight: bold">(</span>1.0.05<span style="color: #000000;font-weight: bold">)</span>
+<span style="color: #000000;font-weight: bold">(</span>CONNECTING<span style="color: #000000;font-weight: bold">)</span> /&gt;
+<span style="color: #000000;font-weight: bold">(</span>CONNECTED<span style="color: #000000;font-weight: bold">)</span> /&gt; loop 100 0 <span style="color: #d14">'create test_ "" true true '</span>
+<span style="color: #000000;font-weight: bold">(</span>CONNECTED<span style="color: #000000;font-weight: bold">)</span> /&gt; exists /
+Stat<span style="color: #000000;font-weight: bold">(</span>
+  <span style="color: #008080">czxid</span><span style="color: #000000;font-weight: bold">=</span>0
+  <span style="color: #008080">mzxid</span><span style="color: #000000;font-weight: bold">=</span>0
+  <span style="color: #008080">ctime</span><span style="color: #000000;font-weight: bold">=</span>0
+  <span style="color: #008080">mtime</span><span style="color: #000000;font-weight: bold">=</span>0
+  <span style="color: #008080">version</span><span style="color: #000000;font-weight: bold">=</span>0
+  <span style="color: #008080">cversion</span><span style="color: #000000;font-weight: bold">=</span>99
+  <span style="color: #008080">aversion</span><span style="color: #000000;font-weight: bold">=</span>0
+  <span style="color: #008080">ephemeralOwner</span><span style="color: #000000;font-weight: bold">=</span>0x0
+  <span style="color: #008080">dataLength</span><span style="color: #000000;font-weight: bold">=</span>0
+  <span style="color: #008080">numChildren</span><span style="color: #000000;font-weight: bold">=</span>101
+  <span style="color: #008080">pzxid</span><span style="color: #000000;font-weight: bold">=</span>4294967397
+<span style="color: #000000;font-weight: bold">)</span>
+<span style="color: #000000;font-weight: bold">(</span>CONNECTED<span style="color: #000000;font-weight: bold">)</span> /&gt;
+</pre></td></tr></tbody></table>
+</div>
 </body></html>

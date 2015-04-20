@@ -11,6 +11,8 @@ $ sudo systemctl enable systemd-resolved
 $ sudo systemctl start systemd-resolved
 ```
 
+More info on systemd-network <a href="https://wiki.archlinux.org/index.php/Systemd-networkd" target="_blank">here</a>.
+
 To be able to resolve containers from the host modify /etc/nsswitch.conf so that you have:
 ```conf
 #hosts:     db files nisplus nis dns

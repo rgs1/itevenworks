@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>itevenworks.net!</title>
+<link data-turbolinks-track="true" href="/assets/rouge.css" media="all" rel="stylesheet" />
+</head>
+<body>
+<h2>Validating ZooKeeper Releases</h2>
+
+<p>A quick way to setup containers in Fedora is via <a href="http://www.freedesktop.org/software/systemd/man/systemd-nspawn.html" target="_blank">systemd-nspawn</a> (a nice intro post about it <a href="http://0pointer.net/blog/systemd-for-administrators-part-xxi.html" target="_blank">here</a>):</p>
+
+<p>Enable networkd on the host so that the NSS magic described below works (for resolving containers):</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4</pre></td><td class="code"><pre><span style="color: #555555">$ </span>sudo systemctl <span style="color: #0086B3">enable </span>systemd-networkd
+<span style="color: #555555">$ </span>sudo systemctl start systemd-networkd
+<span style="color: #555555">$ </span>sudo systemctl <span style="color: #0086B3">enable </span>systemd-resolved
+<span style="color: #555555">$ </span>sudo systemctl start systemd-resolved
+</pre></td></tr></tbody></table>
+</div>
+
+<p>To be able to resolve containers from the host modify /etc/nsswitch.conf so that you have:</p>
+<div class="highlight conf"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2</pre></td><td class="code"><pre><span style="color: #999988;font-style: italic">#hosts:     db files nisplus nis dns
+</span><span style="background-color: #f8f8f8">hosts</span>:      <span style="background-color: #f8f8f8">files</span> <span style="background-color: #f8f8f8">mymachines</span> <span style="background-color: #f8f8f8">mdns4_minimal</span> [<span style="background-color: #f8f8f8">NOTFOUND</span>=<span style="background-color: #f8f8f8">return</span>] <span style="background-color: #f8f8f8">dns</span> <span style="background-color: #f8f8f8">myhostname</span>
+</pre></td></tr></tbody></table>
+</div>
+
+<p>You&#39;ll also want to enable forwarding + masquerading for containers:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2</pre></td><td class="code"><pre><span style="color: #555555">$ </span>sudo sysctl net.ipv4.ip_forward<span style="color: #000000;font-weight: bold">=</span>1
+<span style="color: #555555">$ </span>sudo iptables -t nat -A POSTROUTING -o wlp1s0 -j MASQUERADE
+</pre></td></tr></tbody></table>
+</div>
+
+<p>First, prepare the template container:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2</pre></td><td class="code"><pre><span style="color: #555555">$ </span>sudo yum -y --releasever<span style="color: #000000;font-weight: bold">=</span>21 --nogpg --installroot<span style="color: #000000;font-weight: bold">=</span>/srv/virt-00 <span style="color: #d14">\</span>
+  --disablerepo<span style="color: #000000;font-weight: bold">=</span><span style="color: #d14">'*'</span> --enablerepo<span style="color: #000000;font-weight: bold">=</span>fedora groupinstall <span style="color: #d14">'Web Server'</span>
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Set the root password:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1</pre></td><td class="code"><pre><span style="color: #555555">$ </span>sudo systemd-nspawn --machine<span style="color: #000000;font-weight: bold">=</span>virt-00 --network-veth -D /srv/virt-00
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Now, start the template container and get it setup for ZK:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11</pre></td><td class="code"><pre><span style="color: #555555">$ </span>sudo systemd-nspawn --machine<span style="color: #000000;font-weight: bold">=</span>virt-00 --network-veth -bD /srv/virt-00
+<span style="color: #999988;font-style: italic"># ...</span>
+<span style="color: #555555">$ </span>yum install java ant
+<span style="color: #999988;font-style: italic"># download the ZK release you'd like to test</span>
+<span style="color: #555555">$ </span><span style="color: #008080">url</span><span style="color: #000000;font-weight: bold">=</span>http://people.apache.org/~michim/zookeeper-3.5.1-alpha-candidate-0/zookeeper-3.5.1-alpha.tar.gz
+<span style="color: #555555">$ </span>wget <span style="color: #008080">$url</span>
+<span style="color: #999988;font-style: italic"># build it</span>
+<span style="color: #555555">$ </span><span style="color: #0086B3">export </span><span style="color: #008080">JAVA_TOOL_OPTIONS</span><span style="color: #000000;font-weight: bold">=</span>-Dfile.encoding<span style="color: #000000;font-weight: bold">=</span>UTF8
+<span style="color: #555555">$ </span>tar xzvf zookeeper-3.5.1-alpha.tar.gz
+<span style="color: #555555">$ </span><span style="color: #0086B3">cd </span>zookeeper-3.5.1-alpha
+<span style="color: #555555">$ </span>ant jar
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Great, the template container is ready. Now lets copy it and spawn the other containers (for participants/observers). Note that machinectl, used to manage containers, will soon have support for cloning machines (here is the <a href="http://cgit.freedesktop.org/systemd/systemd/commit/?id=ebd93cb684806ac0f352139e69ac8f53eb49f5e4">commit</a>). For now, we&#39;ll have to do it manually:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6</pre></td><td class="code"><pre><span style="color: #555555">$ </span><span style="color: #0086B3">cd</span> /srv
+<span style="color: #555555">$ </span><span style="color: #000000;font-weight: bold">for </span>i <span style="color: #000000;font-weight: bold">in</span> <span style="color: #000000;font-weight: bold">$(</span>seq 1 5<span style="color: #000000;font-weight: bold">)</span> ; <span style="color: #000000;font-weight: bold">do </span>sudo cp -r virt-00 virt-0<span style="color: #000000;font-weight: bold">${</span><span style="color: #008080">i</span><span style="color: #000000;font-weight: bold">}</span> ; <span style="color: #000000;font-weight: bold">done</span>
+<span style="color: #999988;font-style: italic"># start all</span>
+<span style="color: #555555">$ </span><span style="color: #000000;font-weight: bold">function </span>start<span style="color: #000000;font-weight: bold">()</span> <span style="color: #000000;font-weight: bold">{</span> sudo systemd-nspawn --machine<span style="color: #000000;font-weight: bold">=</span>virt-<span style="color: #000000;font-weight: bold">${</span><span style="color: #008080">1</span><span style="color: #000000;font-weight: bold">}</span> --network-veth -bD /srv/virt-<span style="color: #000000;font-weight: bold">${</span><span style="color: #008080">1</span><span style="color: #000000;font-weight: bold">}</span>; <span style="color: #000000;font-weight: bold">}</span>
+<span style="color: #999988;font-style: italic"># ... each one on its own terminal ...</span>
+<span style="color: #555555">$ </span>start 01
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Now, we need to find the IP addresses for all containers and generate a config (zoo.cfg). For this, we can use the following Python script:</p>
+<div class="highlight python"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41</pre></td><td class="code"><pre><span style="color: #999988;font-style: italic"># gen-zoo-cfg.py</span>
+<span style="color: #999988;font-style: italic">#!/usr/bin/python</span>
+
+<span style="color: #000000;font-weight: bold">from</span> <span style="color: #555555">__future__</span> <span style="color: #000000;font-weight: bold">import</span> <span style="background-color: #f8f8f8">print_function</span>
+
+<span style="color: #000000;font-weight: bold">import</span> <span style="color: #555555">socket</span>
+<span style="color: #000000;font-weight: bold">import</span> <span style="color: #555555">sys</span>
+
+
+<span style="color: #000000;font-weight: bold">def</span> <span style="color: #990000;font-weight: bold">ips</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">prefix</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">hosts</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">port</span><span style="color: #000000;font-weight: bold">=</span><span style="color: #009999">2181</span><span style="background-color: #f8f8f8">):</span>
+    <span style="color: #000000;font-weight: bold">for</span> <span style="background-color: #f8f8f8">host</span> <span style="color: #000000;font-weight: bold">in</span> <span style="background-color: #f8f8f8">hosts</span><span style="background-color: #f8f8f8">:</span>
+        <span style="background-color: #f8f8f8">addrs</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">socket</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">getaddrinfo</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">host</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">port</span><span style="background-color: #f8f8f8">)</span>
+        <span style="color: #000000;font-weight: bold">for</span> <span style="background-color: #f8f8f8">addr</span> <span style="color: #000000;font-weight: bold">in</span> <span style="background-color: #f8f8f8">addrs</span><span style="background-color: #f8f8f8">:</span>
+            <span style="background-color: #f8f8f8">ip</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">addr</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">4</span><span style="background-color: #f8f8f8">][</span><span style="color: #009999">0</span><span style="background-color: #f8f8f8">]</span>
+            <span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">ip</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">startswith</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">prefix</span><span style="background-color: #f8f8f8">):</span>
+                <span style="color: #000000;font-weight: bold">yield</span> <span style="background-color: #f8f8f8">ip</span>
+                <span style="color: #000000;font-weight: bold">break</span>
+
+
+<span style="color: #000000;font-weight: bold">def</span> <span style="color: #990000;font-weight: bold">conf</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">members</span><span style="background-color: #f8f8f8">):</span>
+    <span style="background-color: #f8f8f8">cstr</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">"""
+
+tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir=/tmp/zookeeper
+clientPort=2181
+"""</span>
+    <span style="background-color: #f8f8f8">members_conf</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">[]</span>
+    <span style="color: #000000;font-weight: bold">for</span> <span style="background-color: #f8f8f8">mid</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ip</span> <span style="color: #000000;font-weight: bold">in</span> <span style="background-color: #f8f8f8">members</span><span style="background-color: #f8f8f8">:</span>
+        <span style="background-color: #f8f8f8">mline</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #d14">"server.</span><span style="color: #d14">%</span><span style="color: #d14">d=</span><span style="color: #d14">%</span><span style="color: #d14">s:2889:3888:participant;0.0.0.0:2181"</span> <span style="color: #000000;font-weight: bold">%</span> <span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">mid</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ip</span><span style="background-color: #f8f8f8">)</span>
+        <span style="background-color: #f8f8f8">members_conf</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">append</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">mline</span><span style="background-color: #f8f8f8">)</span>
+
+    <span style="color: #000000;font-weight: bold">return</span> <span style="color: #d14">"</span><span style="color: #d14">\n</span><span style="color: #d14">"</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">join</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">members_conf</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">+</span> <span style="background-color: #f8f8f8">cstr</span>
+
+
+<span style="color: #000000;font-weight: bold">if</span> <span style="background-color: #f8f8f8">__name__</span> <span style="color: #000000;font-weight: bold">==</span> <span style="color: #d14">'__main__'</span><span style="background-color: #f8f8f8">:</span>
+    <span style="background-color: #f8f8f8">idip</span> <span style="color: #000000;font-weight: bold">=</span> <span style="color: #0086B3">enumerate</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">ips</span><span style="background-color: #f8f8f8">(</span><span style="color: #d14">'10.'</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">sys</span><span style="color: #000000;font-weight: bold">.</span><span style="background-color: #f8f8f8">argv</span><span style="background-color: #f8f8f8">[</span><span style="color: #009999">1</span><span style="background-color: #f8f8f8">:]))</span>
+    <span style="background-color: #f8f8f8">members</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">[(</span><span style="background-color: #f8f8f8">mid</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ip</span><span style="background-color: #f8f8f8">)</span> <span style="color: #000000;font-weight: bold">for</span> <span style="background-color: #f8f8f8">mid</span><span style="background-color: #f8f8f8">,</span> <span style="background-color: #f8f8f8">ip</span> <span style="color: #000000;font-weight: bold">in</span> <span style="background-color: #f8f8f8">idip</span><span style="background-color: #f8f8f8">]</span>
+    <span style="background-color: #f8f8f8">cstr</span> <span style="color: #000000;font-weight: bold">=</span> <span style="background-color: #f8f8f8">conf</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">members</span><span style="background-color: #f8f8f8">)</span>
+    <span style="color: #000000;font-weight: bold">print</span><span style="background-color: #f8f8f8">(</span><span style="background-color: #f8f8f8">cstr</span><span style="background-color: #f8f8f8">)</span>
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Finally, we need to distribute the config file (zoo.cfg) to every container and assign their ids (by creating a file called myid with it inside the data dir). The way I do it is by serving the config file via HTTP from the host hosting the containers:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18</pre></td><td class="code"><pre>
+<span style="color: #555555">$ </span>cat <span style="color: #d14">&lt;&lt;EOF &gt; /tmp/zoo.cfg
+server.0=10.0.0.2:2889:3888:participant;0.0.0.0:2181
+server.1=10.0.0.18:2889:3888:participant;0.0.0.0:2181
+server.2=10.0.0.34:2889:3888:participant;0.0.0.0:2181
+server.3=10.0.0.50:2889:3888:participant;0.0.0.0:2181
+server.4=10.0.0.66:2889:3888:participant;0.0.0.0:2181
+server.5=10.0.0.82:2889:3888:observer;0.0.0.0:2181
+
+tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir=/tmp/zookeeper
+clientPort=2181
+EOF
+
+</span><span style="color: #555555">$ </span><span style="color: #0086B3">cd</span> /tmp
+<span style="color: #555555">$ </span>python -m SimpleHTTPServer 8080
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Then you can fetch it from all containers at once. If you use tmux — and you should — you can use this <a href="http://stackoverflow.com/questions/16325449/how-to-send-a-command-to-all-panes-in-tmux" target="_blank">little trick</a> to run multiple commands on all containers.</p>
+
+<p>Or, given the NSS magic described above which allows you to resolve containers, you can loop and ssh into all of them to fetch the configs:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14</pre></td><td class="code"><pre><span style="color: #555555">$ </span>machinectl
+MACHINE                          CONTAINER SERVICE
+virt-05                          container nspawn
+virt-04                          container nspawn
+virt-03                          container nspawn
+virt-02                          container nspawn
+virt-01                          container nspawn
+virt-00                          container nspawn
+
+6 machines listed.
+
+<span style="color: #555555">$ </span><span style="color: #000000;font-weight: bold">for </span>i <span style="color: #000000;font-weight: bold">in</span> <span style="color: #000000;font-weight: bold">$(</span>seq 0 5<span style="color: #000000;font-weight: bold">)</span> ; <span style="color: #000000;font-weight: bold">do
+   </span>ssh root@virt-0<span style="color: #000000;font-weight: bold">${</span><span style="color: #008080">i</span><span style="color: #000000;font-weight: bold">}</span> <span style="color: #d14">'wget http://10.2.2.2:8080/zoo.cfg -O /root/zookeeper-3.5.1-alpha/conf'</span>
+  <span style="color: #000000;font-weight: bold">done</span>
+</pre></td></tr></tbody></table>
+</div>
+
+<p>Great! Only one more thing left, which is to assign ids to each box. Yet another loop:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3
+4
+5
+6
+7
+8
+9</pre></td><td class="code"><pre><span style="color: #999988;font-style: italic"># create the data dir (defaults to /tmp/zookeeper)</span>
+<span style="color: #555555">$ </span><span style="color: #000000;font-weight: bold">for </span>i <span style="color: #000000;font-weight: bold">in</span> <span style="color: #000000;font-weight: bold">$(</span>seq 0 5<span style="color: #000000;font-weight: bold">)</span> ; <span style="color: #000000;font-weight: bold">do
+   </span>ssh root@virt-0<span style="color: #000000;font-weight: bold">${</span><span style="color: #008080">i</span><span style="color: #000000;font-weight: bold">}</span> <span style="color: #d14">'mkdir /tmp/zookeeper'</span>
+  <span style="color: #000000;font-weight: bold">done</span>
+
+<span style="color: #999988;font-style: italic"># assign ids</span>
+<span style="color: #555555">$ </span><span style="color: #000000;font-weight: bold">for </span>i <span style="color: #000000;font-weight: bold">in</span> <span style="color: #000000;font-weight: bold">$(</span>seq 0 5<span style="color: #000000;font-weight: bold">)</span> ; <span style="color: #000000;font-weight: bold">do
+   </span>ssh root@virt-0<span style="color: #000000;font-weight: bold">${</span><span style="color: #008080">i</span><span style="color: #000000;font-weight: bold">}</span> <span style="color: #d14">'echo $(hostname | cut -d- -f2 | sed "s#^0##g") &gt; /tmp/zookeeper/myid'</span>
+  <span style="color: #000000;font-weight: bold">done</span>
+</pre></td></tr></tbody></table>
+</div>
+
+<p>And now, we start the cluster:</p>
+<div class="highlight shell"><table style="border-spacing: 0"><tbody><tr><td class="gutter gl" style="text-align: right"><pre class="lineno">1
+2
+3</pre></td><td class="code"><pre><span style="color: #555555">$ </span><span style="color: #000000;font-weight: bold">for </span>i <span style="color: #000000;font-weight: bold">in</span> <span style="color: #000000;font-weight: bold">$(</span>seq 0 5<span style="color: #000000;font-weight: bold">)</span> ; <span style="color: #000000;font-weight: bold">do
+   </span>ssh root@virt-0<span style="color: #000000;font-weight: bold">${</span><span style="color: #008080">i</span><span style="color: #000000;font-weight: bold">}</span> <span style="color: #d14">'bash -x /root/zookeeper-3.5.1-alpha/bin/zkServer.sh start'</span>
+  <span style="color: #000000;font-weight: bold">done</span>
+</pre></td></tr></tbody></table>
+</div>
+</body></html>

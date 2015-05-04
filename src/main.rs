@@ -75,43 +75,25 @@ fn parse_routes(routes_cfg: String) -> HashMap<String, String> {
     let path = Path::new(&*routes_cfg);
     let comment = Regex::new(r"^#").unwrap();
 
-    match File::open(&path) {
-        Ok(mut file) => {
-            let mut content = String::new();
-            match file.read_to_string(&mut content) {
-                Ok(_) => {
-                    let lines = content.split("\n");
-                    for mut line in lines {
-                        line = line.trim_matches(' ');
-                        if line.is_empty() || comment.is_match(line) {
-                            continue;
-                        }
+    let mut file = File::open(&path).ok().expect("couldn't open routes cfg");
+    let mut content = String::new();
+    let _ = file.read_to_string(&mut content).ok().expect("couldn't read routes");
 
-                        let mut parts = line.split(" ");
-                        let mut added = false;
-                        match parts.next() {
-                            Some(route) => {
-                                match parts.next() {
-                                    Some(html_file) => {
-                                        println!("adding route {} -> {}", route, html_file);
-                                        routes.insert(route.to_string(), html_file.to_string());
-                                        added = true;
-                                    },
-                                    _ => {},
-                                }
-                            },
-                            _ => {},
-                        }
+    let lines = content.split("\n");
+    for mut line in lines {
+        line = line.trim_matches(' ');
+        if line.is_empty() || comment.is_match(line) {
+            continue;
+        }
 
-                        if !added {
-                            println!("skipping bad line: {}", line);
-                        }
-                    }
-                },
-                Err(e) => panic!("couldn't read: {:?}", e),
-            }
-        },
-        Err(e) => panic!("couldn't open routes cfg: {}", e),
+        let parts: Vec<&str> = line.split(" ").collect();
+        if parts.len() != 2 {
+            println!("skipping bad line: {}", line);
+            continue;
+        }
+
+        println!("adding route {} -> {}", parts[0], parts[1]);
+        routes.insert(parts[0].to_string(), parts[1].to_string());
     }
 
     routes
